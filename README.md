@@ -14,3 +14,10 @@ Conditions:
 
 Refer to the document [Architecture](docs/architecture.md) to understand the main line of thinking and the reasons behind the architectural decisions made.
 
+## Build
+
+```sh
+docker build -f Dockerfile.chunk_server -t chunk-server .
+docker build -f Dockerfile.front_server -t front-server .
+docker-compose up
+```
