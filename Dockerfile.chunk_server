@@ -1,0 +1,19 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+COPY . .
+
+RUN go mod tidy
+RUN go build -o chunk_server cmd/chunk_server/main.go
+
+# Use a minimal image for the final container
+FROM alpine:latest
+
+WORKDIR /app
+
+COPY --from=builder /app/chunk_server .
+
+EXPOSE 12090
+
+CMD ["./chunk_server"]

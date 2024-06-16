@@ -1,0 +1,75 @@
+version: '3.8'
+
+x-common: &chunk-servers-common
+  build:
+    context: .
+    dockerfile: Dockerfile.chunk_server
+  depends_on:
+    - front-server
+  networks:
+    - app-network
+
+services:
+  front-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.front_server
+    ports:
+      - "13090:13090"
+    container_name: front-server
+    networks:
+      - app-network
+
+  chunk-server-1:
+    <<: *chunk-servers-common
+    ports:
+      - "12090:12090"
+    volumes:
+      - ./tmp/1:/app/tmp
+    container_name: chunk-server-1
+    environment:
+      - PORT=12090
+
+  chunk-server-2:
+    <<: *chunk-servers-common
+    ports:
+      - "12091:12091"
+    volumes:
+      - ./tmp/2:/app/tmp
+    container_name: chunk-server-2
+    environment:
+      - PORT=12091
+
+  chunk-server-3:
+    <<: *chunk-servers-common
+    ports:
+      - "12092:12092"
+    volumes:
+      - ./tmp/3:/app/tmp
+    container_name: chunk-server-3
+    environment:
+      - PORT=12092
+
+  chunk-server-4:
+    <<: *chunk-servers-common
+    ports:
+      - "12093:12093"
+    volumes:
+      - ./tmp/4:/app/tmp
+    container_name: chunk-server-4
+    environment:
+      - PORT=12093
+
+  chunk-server-5:
+    <<: *chunk-servers-common
+    ports:
+      - "12094:12094"
+    volumes:
+      - ./tmp/5:/app/tmp
+    container_name: chunk-server-5
+    environment:
+      - PORT=12094
+
+networks:
+  app-network:
+    driver: bridge

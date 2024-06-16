@@ -1,0 +1,19 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+COPY . .
+
+RUN go mod tidy
+RUN go build -o front_server cmd/front_server/main.go
+
+# Use a minimal image for the final container
+FROM alpine:latest
+
+WORKDIR /app
+
+COPY --from=builder /app/front_server .
+
+EXPOSE 13090
+
+CMD ["./front_server"]
