@@ -11,18 +11,20 @@ type FrontServer struct {
 	chunkServers map[string]struct{}
 	mu           sync.RWMutex
 
-	logger *slog.Logger
+	httpClient *http.Client
+	logger     *slog.Logger
 }
 
 // StartServer starts the HTTP server on the given port.
 func StartServer(ctx context.Context, logger *slog.Logger, port string) {
 	server := &FrontServer{
 		chunkServers: make(map[string]struct{}),
+		httpClient:   &http.Client{},
 		logger:       logger,
 	}
 	// Setting up handlers
 	http.HandleFunc("/register_chunk_server", server.RegisterChunkServerHandler)
-	http.HandleFunc("/upload", server.UploadHandler)
+	http.HandleFunc("/put", server.PutHandler)
 
 	// Starting the server
 	logger.Info("Starting front server", slog.String("port", port))
