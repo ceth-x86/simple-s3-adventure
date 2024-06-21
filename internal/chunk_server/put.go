@@ -12,12 +12,14 @@ import (
 func PutHandler(w http.ResponseWriter, r *http.Request, config *ServerConfig) {
 	lg := logger.GetLogger()
 	if r.Method != http.MethodPut {
+		lg.Error("Method not allowed", slog.String("method", r.Method))
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	uuid := r.FormValue("uuid")
 	if !uuidRegex.MatchString(uuid) {
+		lg.Error("Incorrect UUID", slog.String("uuid", uuid))
 		http.Error(w, "Incorrect UUID", http.StatusBadRequest)
 		return
 	}
