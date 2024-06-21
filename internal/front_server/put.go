@@ -36,7 +36,7 @@ func httpError(res http.ResponseWriter, message string, statusCode int, err erro
 
 func (f *FrontServer) PutHandler(res http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPut {
-		http.Error(res, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(res, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -69,6 +69,10 @@ func (f *FrontServer) PutHandler(res http.ResponseWriter, req *http.Request) {
 		// TODO: we need to delete the uploaded chunks
 		return
 	}
+
+	f.muChunks.Lock()
+	defer f.muChunks.Unlock()
+	f.chunks[newUUID.String()] = servers
 
 	res.WriteHeader(http.StatusOK)
 }

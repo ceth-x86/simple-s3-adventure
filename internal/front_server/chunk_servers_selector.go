@@ -6,8 +6,8 @@ func (f *FrontServer) selectFirstNChunkServers(n int) []string {
 		return nil
 	}
 
-	f.mu.RLock()
-	defer f.mu.RUnlock()
+	f.muServers.RLock()
+	defer f.muServers.RUnlock()
 
 	chunkServers := make([]string, 0, n)
 	for server := range f.chunkServers {

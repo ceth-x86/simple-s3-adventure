@@ -12,13 +12,13 @@ import (
 func GetHandler(w http.ResponseWriter, r *http.Request, config *ServerConfig) {
 	lg := logger.GetLogger()
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
 	uuid := r.URL.Query().Get("uuid")
 	if !uuidRegex.MatchString(uuid) {
-		http.Error(w, "Incorrect ID", http.StatusBadRequest)
+		http.Error(w, "Incorrect UUID", http.StatusBadRequest)
 		return
 	}
 
