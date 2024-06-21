@@ -13,7 +13,7 @@ func PutHandler(w http.ResponseWriter, r *http.Request, config *ServerConfig) {
 	lg := logger.GetLogger()
 	if r.Method != http.MethodPut {
 		lg.Error("Method not allowed", slog.String("method", r.Method))
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
