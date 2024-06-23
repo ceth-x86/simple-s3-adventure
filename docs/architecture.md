@@ -17,11 +17,9 @@ Architectural decisions:
 - When splitting a file into chunks, we need to avoid large memory allocations.
 - What should be used for communication between the API-Server and Chunk-Server? I would like to use gRPC, but to simplify, I will start with REST API.
 - How to store metadata? It might be worth using a database, but to simplify, we will start with in-memory storage. Using a database in the future will allow us to switch to a configuration with multiple Front servers.
-- When adding a new Chunk-Server, chunks need to be redistributed among servers.
 
 Open questions:
 
-- Choosing Chunk servers at the time of writing a file.
 - What to do if one of the Chunk servers returns an error when writing a chunk? Should we return an error to the client or try to write the chunk to another server?л ошибкой при записи чанка? Возвращать ошибку клиенту или пытаться записать чанк на другой сервер?
 
 Things to do:
@@ -60,11 +58,29 @@ When downloading a file:
 
 ## How will we select Chunk servers to store chunks?
 
-On the Front server, we have a list of all Chunk servers with the amount of data on them. We could select the 6 servers that contain the least amount of data. Here, a data structure like a heap will help us.
+**Server Selection for Data Requests**
 
-But we might have multiple competing requests, and if we follow this strategy, all these requests will hit the same chunk servers. This will result in the servers with the least amount of data becoming heavily overloaded with requests.
+	1.	Objective: Direct requests to chunk servers with the least amount of data.
+	2.	Load Balancing Consideration: Ensure requests are not disproportionately directed to a subset of chunk servers, as this could lead to overload.
 
-We could store not only the volume of data on each chunk server but also an indicator (or the count) of requests that it is currently processing (infly requests). We should prioritize selecting servers with fewer ongoing requests and, secondarily, those with less data.
+These are the primary considerations for selecting chunk servers. Initially, I contemplated data structures that could allow us to maintain servers ordered by data volume and request load, such as heaps or red-black trees. However, this approach seemed overly complex for our needs.
+
+**Proposed Solution**
+
+I opted for a simple yet effective method. Knowing the total data volume across all chunk servers and the number of chunk servers, we can divide the total data volume by the number of chunk servers to obtain the average data volume per server. Servers with data volumes above this average are considered overloaded. Thus, we will select chunk servers with data volumes below this average for handling requests.
+
+Instead of always choosing the server with the smallest data volume, we will sequentially distribute requests across all servers with below-average data volumes, ensuring balanced data distribution and avoiding the overload of any subset of servers.
+
+To implement this idea, we will maintain all servers in a linked list. For each request, we will sequentially iterate through the list, selecting servers with data volumes below the average.
+
+Additional Considerations
+
+- Servers with data volumes up to 20% above the average will still be considered suitable for new data requests. This increases the number of servers available for data writing.
+- In scenarios with a small number of chunk servers, there may not be enough servers with below-average data volumes. In such cases, we will select servers with data volumes above the average too.
+
+This strategy will ensure balanced data volumes and load distribution across servers.
+
+For large numbers of chunk servers, we can assume that approximately half will have below-average data volumes. Therefore, to select `N` servers, we need to iterate through `2N` elements in our list.
 
 ## How the front server know about all the chunk servers?
 
@@ -85,6 +101,10 @@ While the chunk server was unavailable, data associated with this key might have
 We will lose all data. The chunk servers still have information about the chunks, but we will lose information on how to reconstruct files from these chunks. To solve this problem, we should use some external storage, such as a database.
 
 Additionally, our service will become unavailable at that moment (it will stop accepting new requests). To increase the availability of our solution, we should consider running multiple front servers with a shared database. Requests should be load-balanced among them.
+
+## Caching
+
+...
 
 ## Do we need to balance when adding a new chunk server?
 

@@ -27,9 +27,7 @@ func (f *FrontServer) GetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f.muChunks.RLock()
-	chunkServers := f.chunks[uuid]
-	f.muChunks.RUnlock()
+	chunkServers := f.allocationMap.getChunkServers(uuid)
 
 	readers := make([]*io.PipeReader, len(chunkServers))
 	writers := make([]*io.PipeWriter, len(chunkServers))
@@ -64,7 +62,7 @@ func (f *FrontServer) GetHandler(w http.ResponseWriter, r *http.Request) {
 				multErrs = append(multErrs, err)
 				mu.Unlock()
 			}
-		}(i, server)
+		}(i, server.address)
 	}
 
 	go func() {
