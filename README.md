@@ -47,3 +47,6 @@ Chunk server:
 Chunk server and frontend server:
 
 [ ] Health and live checks.
+[ ] Store metadata for file.
+[ ] Checksums.
+[ ] Replication and data recovery in case of Chunk-Server node failure.

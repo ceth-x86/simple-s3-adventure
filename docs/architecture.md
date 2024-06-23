@@ -22,12 +22,6 @@ Open questions:
 
 - What to do if one of the Chunk servers returns an error when writing a chunk? Should we return an error to the client or try to write the chunk to another server?л ошибкой при записи чанка? Возвращать ошибку клиенту или пытаться записать чанк на другой сервер?
 
-Things to do:
-
-- Metadata.
-- Checksums.
-- Replication and data recovery in case of Chunk-Server node failure.
-
 Out of scope:
 
 - Authorization and authentication.
