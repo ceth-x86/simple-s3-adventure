@@ -65,8 +65,16 @@ func (f *FrontServer) PutHandler(res http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := f.processFileChunks(context.Background(), file, fileUUID, header.Size, offsets, servers); err != nil {
+		// We tried to write the file to the server, but we couldn’t.
+		// The best we can do now is clean up after ourselves and return an error.
+
+		// Some servers that failed to write the file will respond with an error when attempting to delete it.
+		// This is not critical; we can return to this optimization later.
+		if delErr := f.deleteFileChunks(fileUUID, servers); delErr != nil {
+			f.logger.Warn("Failed to delete file chunks", slog.String("file_id", fileUUID), slog.Any("error", delErr))
+		}
+
 		httpError(res, "Failed to process chunk", http.StatusInternalServerError, err, f)
-		// TODO: we need to delete the uploaded chunks
 		return
 	}
 
@@ -156,13 +164,68 @@ func (f *FrontServer) processChunk(ctx context.Context, file multipart.File, uui
 		return nil
 	}, bo); err != nil {
 		if errors.Is(err, context.Canceled) {
-			f.logger.Info("Registration cancelled")
+			f.logger.Info("Uploading cancelled")
 		} else {
 			f.logger.Info("Failed to send request to chunk server", slog.String("error", err.Error()))
 		}
 		return err
 	}
 	return nil
+}
+
+func (f *FrontServer) deleteFileChunks(uuid string, servers []*chunkServer) error {
+	g, ctx := errgroup.WithContext(context.Background())
+
+	for _, server := range servers {
+		server := server
+		g.Go(func() error {
+			return f.deleteChunk(ctx, uuid, server)
+		})
+	}
+
+	return g.Wait()
+}
+
+func (f *FrontServer) deleteChunk(ctx context.Context, uuid string, server *chunkServer) error {
+	req, err := http.NewRequest("DELETE", server.address+"/delete?uuid="+uuid, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create DELETE request: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	var attempt int
+	var resp *http.Response
+
+	// Create a backoff policy with a maximum of 5 retries
+	bo := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5)
+	bo = backoff.WithContext(bo, ctx)
+
+	if err := backoff.Retry(func() error {
+		attempt++
+		resp, err = f.httpClient.Do(req.WithContext(ctx))
+		if resp != nil {
+			defer resp.Body.Close()
+		}
+		if err != nil {
+			f.logger.Info("Failed to send DELETE request", slog.Int("attempt", attempt), slog.String("error", err.Error()))
+			return fmt.Errorf("failed to send DELETE request: %w", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("received non-OK HTTP status: %d", resp.StatusCode)
+		}
+		return nil
+	}, bo); err != nil {
+		if errors.Is(err, context.Canceled) {
+			f.logger.Info("Deletion cancelled")
+		} else {
+			f.logger.Info("Failed to send request to chunk server", slog.String("error", err.Error()))
+		}
+		return err
+	}
+	return nil
+
 }
 
 // calculateChunkSize calculates the size of a chunk based on its offsets.

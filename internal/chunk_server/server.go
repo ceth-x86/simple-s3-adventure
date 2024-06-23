@@ -64,6 +64,9 @@ func registerHandlers(mux *http.ServeMux, config *ServerConfig) {
 	mux.HandleFunc("/get", func(w http.ResponseWriter, r *http.Request) {
 		GetHandler(w, r, config)
 	})
+	mux.HandleFunc("/delete", func(w http.ResponseWriter, r *http.Request) {
+		DeleteHandler(w, r, config)
+	})
 }
 
 // StartServer starts the HTTP server on the given port.
