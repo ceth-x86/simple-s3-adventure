@@ -40,5 +40,5 @@ func GetHandler(w http.ResponseWriter, r *http.Request, config *ServerConfig) {
 		return
 	}
 
-	lg.Info("File sent", slog.String("file_id", uuid))
+	lg.Info("File sent", slog.String("uuid", uuid))
 }

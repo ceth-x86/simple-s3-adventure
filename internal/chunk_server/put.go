@@ -64,6 +64,6 @@ func PutHandler(w http.ResponseWriter, r *http.Request, config *ServerConfig) {
 		return
 	}
 
-	lg.Info("File uploaded", slog.String("file_id", uuid))
+	lg.Info("File uploaded", slog.String("uuid", uuid))
 	w.WriteHeader(http.StatusOK)
 }
