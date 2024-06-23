@@ -3,14 +3,17 @@ package front_server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
-	"simple-s3-adventure/pkg/config"
 	"time"
+
+	"simple-s3-adventure/pkg/config"
+	"simple-s3-adventure/pkg/logger"
 
 	"github.com/cenkalti/backoff"
 	"github.com/google/uuid"
@@ -27,54 +30,60 @@ var (
 	maxUploadSize = config.GetEnvInt64("MAX_UPLOAD_SIZE", defaultMaxUploadSize)
 )
 
+type putResponse struct {
+	UUID string `json:"uuid"`
+}
+
 func httpError(res http.ResponseWriter, message string, statusCode int, err error, f *FrontServer) {
 	if err != nil {
-		f.logger.Error(message, slog.Any("error", err))
+		logger.GetLogger().Error(message, slog.Any("error", err))
 	}
 	http.Error(res, message, statusCode)
 }
 
-func (f *FrontServer) PutHandler(res http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPut {
-		http.Error(res, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+func (f *FrontServer) PutHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 		return
 	}
 
 	fileUUID := uuid.New().String()
 
-	err := req.ParseMultipartForm(maxUploadSize)
+	err := r.ParseMultipartForm(maxUploadSize)
 	if err != nil {
-		httpError(res, "Failed to parse multipart form", http.StatusInternalServerError, err, f)
+		httpError(w, "Failed to parse multipart form", http.StatusInternalServerError, err, f)
 		return
 	}
 
-	file, header, err := req.FormFile("file")
+	file, header, err := r.FormFile("file")
 	if err != nil {
-		httpError(res, "Failed to get file from form", http.StatusInternalServerError, err, f)
+		httpError(w, "Failed to get file from form", http.StatusInternalServerError, err, f)
 		return
 	}
 	defer file.Close()
 
-	f.logger.Info("File uploading", slog.String("file_id", fileUUID), slog.Int64("file_size", header.Size))
+	lg := logger.GetLogger()
+	lg.Info("File uploading", slog.String("file_id", fileUUID), slog.Int64("file_size", header.Size))
 
 	offsets := chunkOffsets(header.Size, numParts)
 	servers := f.registry.selectUnderloadedChunkServers(numParts)
 	if len(servers) != numParts {
-		httpError(res, "Not enough chunk servers available", http.StatusInternalServerError, nil, f)
+		httpError(w, "Not enough chunk servers available", http.StatusInternalServerError, nil, f)
 		return
 	}
 
-	if err := f.processFileChunks(context.Background(), file, fileUUID, header.Size, offsets, servers); err != nil {
+	ctx := context.Background()
+	if err := f.processFileChunks(ctx, file, fileUUID, header.Size, offsets, servers); err != nil {
 		// We tried to write the file to the server, but we couldn’t.
 		// The best we can do now is clean up after ourselves and return an error.
 
 		// Some servers that failed to write the file will respond with an error when attempting to delete it.
 		// This is not critical; we can return to this optimization later.
-		if delErr := f.deleteFileChunks(fileUUID, servers); delErr != nil {
-			f.logger.Warn("Failed to delete file chunks", slog.String("file_id", fileUUID), slog.Any("error", delErr))
+		if delErr := f.deleteFileChunks(ctx, fileUUID, servers); delErr != nil {
+			lg.Warn("Failed to delete file chunks", slog.String("file_id", fileUUID), slog.Any("error", delErr))
 		}
 
-		httpError(res, "Failed to process chunk", http.StatusInternalServerError, err, f)
+		httpError(w, "Failed to process chunk", http.StatusInternalServerError, err, f)
 		return
 	}
 
@@ -88,7 +97,14 @@ func (f *FrontServer) PutHandler(res http.ResponseWriter, req *http.Request) {
 	}
 	f.registry.adjustSizes(servers, incSizes, header.Size)
 
-	res.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "text/json")
+	result := putResponse{UUID: fileUUID}
+	err = json.NewEncoder(w).Encode(result)
+	if err != nil {
+		httpError(w, "Failed to encode response", http.StatusInternalServerError, err, f)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (f *FrontServer) processFileChunks(ctx context.Context, file multipart.File, uuid string, fileSize int64, offsets []int64, servers []*chunkServer) error {
@@ -109,7 +125,8 @@ func (f *FrontServer) processChunk(ctx context.Context, file multipart.File, uui
 	startOffset := offsets[i]
 	chunkSize := calculateChunkSize(fileSize, offsets, i)
 
-	f.logger.Info("Processing chunk", slog.String("uuid", uuid), slog.Int("chunk", i), slog.String("server", servers[i].address), slog.Int64("start_offset", startOffset), slog.Int64("chunk_size", chunkSize))
+	lg := logger.GetLogger()
+	lg.Info("Processing chunk", slog.String("uuid", uuid), slog.Int("chunk", i), slog.String("server", servers[i].address), slog.Int64("start_offset", startOffset), slog.Int64("chunk_size", chunkSize))
 
 	sr := io.NewSectionReader(file, startOffset, chunkSize)
 	var requestBody bytes.Buffer
@@ -155,7 +172,7 @@ func (f *FrontServer) processChunk(ctx context.Context, file multipart.File, uui
 			defer resp.Body.Close()
 		}
 		if err != nil {
-			f.logger.Info("Failed to send PUT request", slog.Int("attempt", attempt), slog.String("error", err.Error()))
+			lg.Error("Failed to send PUT request", slog.Int("attempt", attempt), slog.String("error", err.Error()))
 			return fmt.Errorf("failed to send PUT request: %w", err)
 		}
 		if resp.StatusCode != http.StatusOK {
@@ -164,17 +181,17 @@ func (f *FrontServer) processChunk(ctx context.Context, file multipart.File, uui
 		return nil
 	}, bo); err != nil {
 		if errors.Is(err, context.Canceled) {
-			f.logger.Info("Uploading cancelled")
+			lg.Error("Uploading cancelled")
 		} else {
-			f.logger.Info("Failed to send request to chunk server", slog.String("error", err.Error()))
+			lg.Error("Failed to send request to chunk server", slog.String("error", err.Error()))
 		}
 		return err
 	}
 	return nil
 }
 
-func (f *FrontServer) deleteFileChunks(uuid string, servers []*chunkServer) error {
-	g, ctx := errgroup.WithContext(context.Background())
+func (f *FrontServer) deleteFileChunks(ctx context.Context, uuid string, servers []*chunkServer) error {
+	g, ctx := errgroup.WithContext(ctx)
 
 	for _, server := range servers {
 		server := server
@@ -197,6 +214,7 @@ func (f *FrontServer) deleteChunk(ctx context.Context, uuid string, server *chun
 
 	var attempt int
 	var resp *http.Response
+	lg := logger.GetLogger()
 
 	// Create a backoff policy with a maximum of 5 retries
 	bo := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5)
@@ -209,7 +227,7 @@ func (f *FrontServer) deleteChunk(ctx context.Context, uuid string, server *chun
 			defer resp.Body.Close()
 		}
 		if err != nil {
-			f.logger.Info("Failed to send DELETE request", slog.Int("attempt", attempt), slog.String("error", err.Error()))
+			lg.Error("Failed to send DELETE request", slog.Int("attempt", attempt), slog.String("error", err.Error()))
 			return fmt.Errorf("failed to send DELETE request: %w", err)
 		}
 		if resp.StatusCode != http.StatusOK {
@@ -218,9 +236,9 @@ func (f *FrontServer) deleteChunk(ctx context.Context, uuid string, server *chun
 		return nil
 	}, bo); err != nil {
 		if errors.Is(err, context.Canceled) {
-			f.logger.Info("Deletion cancelled")
+			lg.Error("Deletion cancelled")
 		} else {
-			f.logger.Info("Failed to send request to chunk server", slog.String("error", err.Error()))
+			lg.Error("Failed to send request to chunk server", slog.String("error", err.Error()))
 		}
 		return err
 	}

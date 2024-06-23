@@ -102,9 +102,9 @@ We will lose all data. The chunk servers still have information about the chunks
 
 Additionally, our service will become unavailable at that moment (it will stop accepting new requests). To increase the availability of our solution, we should consider running multiple front servers with a shared database. Requests should be load-balanced among them.
 
-## Caching
+## Is it a good idea to store files in a flat structure on a chunk server?
 
-...
+Storing files in a flat structure on a chunk server may not be the best idea for several reasons: `inode` limitation, performance and scalability. Therefore, it is better to store files in folders, but I haven’t implemented this yet.
 
 ## Do we need to balance when adding a new chunk server?
 

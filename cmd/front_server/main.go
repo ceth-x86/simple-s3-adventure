@@ -27,5 +27,5 @@ func main() {
 		cancel(errors.New("app termination by sigterm"))
 	}()
 
-	front_server.StartServer(ctx, logger, port)
+	front_server.StartServer(ctx, port)
 }

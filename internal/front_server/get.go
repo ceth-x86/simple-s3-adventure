@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+
+	"simple-s3-adventure/pkg/logger"
 )
 
 const (
@@ -72,11 +74,12 @@ func (f *FrontServer) GetHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	lg := logger.GetLogger()
 	size := int64(0)
 	for _, reader := range readers {
 		n, err := io.Copy(w, reader)
 		if err != nil {
-			f.logger.Error("Error copying chunks", slog.Any("error", err))
+			lg.Error("Error copying chunks", slog.Any("error", err))
 			http.Error(w, "Error copying chunks", http.StatusInternalServerError)
 			return
 		}
@@ -84,11 +87,13 @@ func (f *FrontServer) GetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(multErrs) != 0 {
-		f.logger.Error("Error fetching chunks", slog.Any("errors", multErrs))
+		lg.Error("Error fetching chunks", slog.Any("errors", multErrs))
 		http.Error(w, "Error fetching chunks", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", "attachment")
 	w.WriteHeader(http.StatusOK)
 }
