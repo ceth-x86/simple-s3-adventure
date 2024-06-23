@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
 	"simple-s3-adventure/pkg/logger"
 )
 

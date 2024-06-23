@@ -22,12 +22,6 @@ Open questions:
 
 - What to do if one of the Chunk servers returns an error when writing a chunk? Should we return an error to the client or try to write the chunk to another server?л ошибкой при записи чанка? Возвращать ошибку клиенту или пытаться записать чанк на другой сервер?
 
-Things to do:
-
-- Metadata.
-- Checksums.
-- Replication and data recovery in case of Chunk-Server node failure.
-
 Out of scope:
 
 - Authorization and authentication.
@@ -102,9 +96,9 @@ We will lose all data. The chunk servers still have information about the chunks
 
 Additionally, our service will become unavailable at that moment (it will stop accepting new requests). To increase the availability of our solution, we should consider running multiple front servers with a shared database. Requests should be load-balanced among them.
 
-## Caching
+## Is it a good idea to store files in a flat structure on a chunk server?
 
-...
+Storing files in a flat structure on a chunk server may not be the best idea for several reasons: `inode` limitation, performance and scalability. Therefore, it is better to store files in folders, but I haven’t implemented this yet.
 
 ## Do we need to balance when adding a new chunk server?
 

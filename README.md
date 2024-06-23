@@ -14,10 +14,39 @@ Conditions:
 
 Refer to the document [Architecture](docs/architecture.md) to understand the main line of thinking and the reasons behind the architectural decisions made.
 
-## Build
+## Build and run
+
+This command build and launch a cluster consisting of one frontend server and ten chunk servers:
 
 ```sh
-docker build -f Dockerfile.chunk_server -t chunk-server .
-docker build -f Dockerfile.front_server -t front-server .
 docker-compose up
 ```
+
+Upload file:
+
+```sh
+curl -X PUT -F file=@example.pdf 'http://localhost:13090/put'
+```
+
+Download file:
+
+```sh
+curl -X GET 'http://localhost:13090/get?uuid=69d973de-c7ba-4856-9e54-773bb0e58546' > example_result.pdf
+```
+
+## TODO:
+
+Frontend server:
+
+[ ] A set of endpoints for collecting statistics from the frontend server: for example, data distribution across nodes.
+
+Chunk server:
+
+[ ] Checking for available space before uploading a chunk.
+
+Chunk server and frontend server:
+
+[ ] Health and live checks.
+[ ] Store metadata for file.
+[ ] Checksums.
+[ ] Replication and data recovery in case of Chunk-Server node failure.

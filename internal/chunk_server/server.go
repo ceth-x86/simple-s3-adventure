@@ -98,7 +98,6 @@ func StartServer(config *ServerConfig) {
 			}
 			os.Exit(1)
 		}
-		lg.Info("Chunk server registered")
 	})
 
 	lg.Info("Starting chunk server", slog.String("port", config.Port))
