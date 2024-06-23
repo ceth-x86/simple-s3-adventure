@@ -38,15 +38,16 @@ curl -X GET 'http://localhost:13090/get?uuid=69d973de-c7ba-4856-9e54-773bb0e5854
 
 Frontend server:
 
-[ ] A set of endpoints for collecting statistics from the frontend server: for example, data distribution across nodes.
+- A set of endpoints for collecting statistics from the frontend server: for example, data distribution across nodes.
 
 Chunk server:
 
-[ ] Checking for available space before uploading a chunk.
+- Checking for available space before uploading a chunk.
+- If an error occurs when writing a chunk to the chunk server, we can try writing this chunk to another chunk server.
 
 Chunk server and frontend server:
 
-[ ] Health and live checks.
-[ ] Store metadata for file.
-[ ] Checksums.
-[ ] Replication and data recovery in case of Chunk-Server node failure.
+- Health and live checks.
+- Store metadata for file.
+- Checksums.
+- Replication and data recovery in case of Chunk-Server node failure.
