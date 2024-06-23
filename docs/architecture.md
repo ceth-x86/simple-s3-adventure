@@ -42,8 +42,8 @@ When writing a file:
 When downloading a file:
 
 - We receive a file download request on the API server.
-- We have a sync.Map that stores an ordered list of chunk servers where the file is stored.
-- We make up to 6 requests to download the chunks.
+- Use `PipeReader` and `PipeWriter` to transfer data from the Chunk servers to the client.
+- We make up to 6 requests to download the chunks concurrently.
 - We sequentially read the data from the chunk servers’ responses into the API server’s response.
 
 ## How will we select Chunk servers to store chunks?
