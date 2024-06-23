@@ -100,7 +100,10 @@ func (c *chunkServerRegistry) selectUnderloadedChunkServers(n int) []*chunkServe
 		return nil
 	}
 
+	// chunkServersMap is used to check if the server is already selected
+	chunkServersMap := make(map[string]struct{}, n)
 	chunkServers := make([]*chunkServer, 0, n)
+
 	sizeThreshold := sizeThreshold(c.totalSize, int64(len(c.chunkServerAddresses)), fillFactor)
 	lg.Info("Selecting servers",
 		slog.Int64("totalSize", c.totalSize),
@@ -122,9 +125,9 @@ func (c *chunkServerRegistry) selectUnderloadedChunkServers(n int) []*chunkServe
 			c.nextServer = c.chunkServers.Front()
 		}
 
-		for srv := c.nextServer; srv != nil; srv = srv.Next() {
-			address := srv.Value.(*chunkServer).address
-			serverSize := srv.Value.(*chunkServer).size
+		for ; c.nextServer != nil; c.nextServer = c.nextServer.Next() {
+			address := c.nextServer.Value.(*chunkServer).address
+			serverSize := c.nextServer.Value.(*chunkServer).size
 			if address == startFromServer {
 				if !firstRound {
 					// We have gone through all servers once, so now we are ready get servers with size > threshold
@@ -133,6 +136,10 @@ func (c *chunkServerRegistry) selectUnderloadedChunkServers(n int) []*chunkServe
 				firstRound = false
 			}
 
+			// skip already selected servers
+			if _, ok := chunkServersMap[address]; ok {
+				continue
+			}
 			willBeSelected := serverSize < sizeThreshold || readyToGetOversized
 
 			lg.Info("Checking server",
@@ -144,7 +151,8 @@ func (c *chunkServerRegistry) selectUnderloadedChunkServers(n int) []*chunkServe
 			)
 
 			if willBeSelected {
-				chunkServers = append(chunkServers, srv.Value.(*chunkServer))
+				chunkServers = append(chunkServers, c.nextServer.Value.(*chunkServer))
+				chunkServersMap[address] = struct{}{}
 				if len(chunkServers) == n {
 					return chunkServers
 				}

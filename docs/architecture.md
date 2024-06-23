@@ -18,10 +18,6 @@ Architectural decisions:
 - What should be used for communication between the API-Server and Chunk-Server? I would like to use gRPC, but to simplify, I will start with REST API.
 - How to store metadata? It might be worth using a database, but to simplify, we will start with in-memory storage. Using a database in the future will allow us to switch to a configuration with multiple Front servers.
 
-Open questions:
-
-- What to do if one of the Chunk servers returns an error when writing a chunk? Should we return an error to the client or try to write the chunk to another server?л ошибкой при записи чанка? Возвращать ошибку клиенту или пытаться записать чанк на другой сервер?
-
 Out of scope:
 
 - Authorization and authentication.
@@ -54,8 +50,8 @@ When downloading a file:
 
 **Server Selection for Data Requests**
 
-	1.	Objective: Direct requests to chunk servers with the least amount of data.
-	2.	Load Balancing Consideration: Ensure requests are not disproportionately directed to a subset of chunk servers, as this could lead to overload.
+1. Objective: Direct requests to chunk servers with the least amount of data.
+2. Load Balancing Consideration: Ensure requests are not disproportionately directed to a subset of chunk servers, as this could lead to overload.
 
 These are the primary considerations for selecting chunk servers. Initially, I contemplated data structures that could allow us to maintain servers ordered by data volume and request load, such as heaps or red-black trees. However, this approach seemed overly complex for our needs.
 
