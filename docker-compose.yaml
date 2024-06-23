@@ -80,6 +80,26 @@ services:
     environment:
       - PORT=12095
 
+  chunk-server-7:
+    <<: *chunk-servers-common
+    ports:
+      - "12096:12096"
+    volumes:
+      - ./tmp/7:/app/tmp
+    container_name: chunk-server-7
+    environment:
+      - PORT=12096
+
+  chunk-server-8:
+    <<: *chunk-servers-common
+    ports:
+      - "12097:12097"
+    volumes:
+      - ./tmp/8:/app/tmp
+    container_name: chunk-server-8
+    environment:
+      - PORT=12097
+
 networks:
   app-network:
     driver: bridge

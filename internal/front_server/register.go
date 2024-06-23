@@ -27,16 +27,11 @@ func (f *FrontServer) RegisterChunkServerHandler(w http.ResponseWriter, r *http.
 	}
 
 	f.logger.Info("Registering chunk server", slog.String("url", r.FormValue("url")))
-
-	f.muServers.Lock()
-	defer f.muServers.Unlock()
-
-	if _, exists := f.chunkServers[serverURL]; exists {
-		http.Error(w, "Server already registered", http.StatusConflict)
-		f.logger.Error("Server already registered", slog.String("url", serverURL))
-		return
+	err = f.registry.addChunkServer(serverURL)
+	if err != nil {
+		f.logger.Error(err.Error())
+		http.Error(w, err.Error(), http.StatusConflict)
 	}
-	f.chunkServers[serverURL] = struct{}{}
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Chunk server registered successfully"))

@@ -40,7 +40,7 @@ func (f *FrontServer) PutHandler(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	newUUID := uuid.New()
+	fileUUID := uuid.New().String()
 
 	err := req.ParseMultipartForm(maxUploadSize)
 	if err != nil {
@@ -55,29 +55,35 @@ func (f *FrontServer) PutHandler(res http.ResponseWriter, req *http.Request) {
 	}
 	defer file.Close()
 
-	f.logger.Info("File uploading", slog.String("file_id", newUUID.String()), slog.Int64("file_size", header.Size))
+	f.logger.Info("File uploading", slog.String("file_id", fileUUID), slog.Int64("file_size", header.Size))
 
 	offsets := chunkOffsets(header.Size, numParts)
-	servers := f.selectFirstNChunkServers(numParts)
+	servers := f.registry.selectUnderloadedChunkServers(numParts)
 	if len(servers) != numParts {
 		httpError(res, "Not enough chunk servers available", http.StatusInternalServerError, nil, f)
 		return
 	}
 
-	if err := f.processFileChunks(context.Background(), file, newUUID.String(), header.Size, offsets, servers); err != nil {
+	if err := f.processFileChunks(context.Background(), file, fileUUID, header.Size, offsets, servers); err != nil {
 		httpError(res, "Failed to process chunk", http.StatusInternalServerError, err, f)
 		// TODO: we need to delete the uploaded chunks
 		return
 	}
 
-	f.muChunks.Lock()
-	defer f.muChunks.Unlock()
-	f.chunks[newUUID.String()] = servers
+	f.allocationMap.addChunk(fileUUID, servers)
+
+	// Update the size of the chunk servers
+	incSizes := make([]int64, len(servers))
+	for i, _ := range servers {
+		incSizes[i] = calculateChunkSize(header.Size, offsets, i)
+
+	}
+	f.registry.adjustSizes(servers, incSizes, header.Size)
 
 	res.WriteHeader(http.StatusOK)
 }
 
-func (f *FrontServer) processFileChunks(ctx context.Context, file multipart.File, uuid string, fileSize int64, offsets []int64, servers []string) error {
+func (f *FrontServer) processFileChunks(ctx context.Context, file multipart.File, uuid string, fileSize int64, offsets []int64, servers []*chunkServer) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	for i := 0; i < len(offsets); i++ {
@@ -91,11 +97,11 @@ func (f *FrontServer) processFileChunks(ctx context.Context, file multipart.File
 }
 
 // processChunk processes a single chunk of the uploaded file.
-func (f *FrontServer) processChunk(ctx context.Context, file multipart.File, uuid string, fileSize int64, offsets []int64, servers []string, i int) error {
+func (f *FrontServer) processChunk(ctx context.Context, file multipart.File, uuid string, fileSize int64, offsets []int64, servers []*chunkServer, i int) error {
 	startOffset := offsets[i]
 	chunkSize := calculateChunkSize(fileSize, offsets, i)
 
-	f.logger.Info("Processing chunk", slog.String("uuid", uuid), slog.Int("chunk", i), slog.String("server", servers[i]), slog.Int64("start_offset", startOffset), slog.Int64("chunk_size", chunkSize))
+	f.logger.Info("Processing chunk", slog.String("uuid", uuid), slog.Int("chunk", i), slog.String("server", servers[i].address), slog.Int64("start_offset", startOffset), slog.Int64("chunk_size", chunkSize))
 
 	sr := io.NewSectionReader(file, startOffset, chunkSize)
 	var requestBody bytes.Buffer
@@ -118,7 +124,7 @@ func (f *FrontServer) processChunk(ctx context.Context, file multipart.File, uui
 		return fmt.Errorf("failed to close writer: %w", err)
 	}
 
-	req, err := http.NewRequest("PUT", servers[i]+"/put", &requestBody)
+	req, err := http.NewRequest("PUT", servers[i].address+"/put", &requestBody)
 	if err != nil {
 		return fmt.Errorf("failed to create PUT request: %w", err)
 	}
