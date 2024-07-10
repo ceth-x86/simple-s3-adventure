@@ -1,4 +1,4 @@
-package chunk_server
+package api
 
 import (
 	"bytes"

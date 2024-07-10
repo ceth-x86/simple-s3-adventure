@@ -1,16 +1,18 @@
-package chunk_server
+package api
 
 import (
-	"io"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
+
+	srv "simple-s3-adventure/internal/chunk_server/service"
 	"simple-s3-adventure/pkg/logger"
+	uuid2 "simple-s3-adventure/pkg/uuid"
 )
 
-func PutHandler(w http.ResponseWriter, r *http.Request, config *ServerConfig) {
+func PutHandler(w http.ResponseWriter, r *http.Request, config *srv.ServerConfig) {
 	lg := logger.GetLogger()
+	chunkService := srv.NewChunkService(config, lg)
+
 	if r.Method != http.MethodPut {
 		lg.Error("Method not allowed", slog.String("method", r.Method))
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -18,14 +20,12 @@ func PutHandler(w http.ResponseWriter, r *http.Request, config *ServerConfig) {
 	}
 
 	uuid := r.FormValue("uuid")
-	if !uuidRegex.MatchString(uuid) {
-		lg.Error("Incorrect UUID", slog.String("uuid", uuid))
+	if err := uuid2.Validate(uuid); err != nil {
 		http.Error(w, "Incorrect UUID", http.StatusBadRequest)
 		return
 	}
 
-	if err := os.MkdirAll(config.UploadDir, os.ModePerm); err != nil {
-		lg.Error("Failed to create upload directory", slog.Any("error", err))
+	if err := srv.CreateUploadDir(config.UploadDir); err != nil {
 		http.Error(w, "Failed to create upload directory", http.StatusInternalServerError)
 		return
 	}
@@ -47,23 +47,10 @@ func PutHandler(w http.ResponseWriter, r *http.Request, config *ServerConfig) {
 	}
 	defer file.Close()
 
-	// Create a file on the server to save the uploaded file
-	filePath := filepath.Join(config.UploadDir, uuid)
-	dst, err := os.Create(filePath)
-	if err != nil {
-		lg.Error("Failed to create file on server", slog.Any("error", err))
-		http.Error(w, "failed to create file on server", http.StatusInternalServerError)
-		return
-	}
-	defer dst.Close()
-
-	_, err = io.Copy(dst, file)
-	if err != nil {
-		lg.Error("Failed to save uploaded file", slog.Any("error", err))
-		http.Error(w, "Failed to save uploaded file", http.StatusInternalServerError)
+	if err := chunkService.SaveUploadedFile(file, uuid); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	lg.Info("File uploaded", slog.String("uuid", uuid))
 	w.WriteHeader(http.StatusOK)
 }

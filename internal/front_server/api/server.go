@@ -1,36 +1,32 @@
-package front_server
+package api
 
 import (
-	"container/list"
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"simple-s3-adventure/internal/front_server/front_service"
 	"syscall"
 	"time"
 
+	"simple-s3-adventure/internal/front_server/registry_service"
 	"simple-s3-adventure/pkg/logger"
 )
 
 const shutdownTimeout = 5 * time.Second
 
 type FrontServer struct {
-	registry      *chunkServerRegistry
-	allocationMap *chunkAllocationMap
-	httpClient    *http.Client
-	server        *http.Server
+	service *front_service.FrontService
+	server  *http.Server
 }
 
 func NewFrontServer() *FrontServer {
 	return &FrontServer{
-		registry: &chunkServerRegistry{
-			chunkServerAddresses: make(map[string]struct{}),
-			chunkServers:         list.New(),
-		},
-		allocationMap: &chunkAllocationMap{chunks: make(map[string][]*chunkServer)},
-
-		httpClient: &http.Client{},
+		service: front_service.NewFrontService(
+			registry_service.NewChunkServerRegistry(),
+			registry_service.NewChunkAllocationMap()),
 	}
 }
 
@@ -53,7 +49,7 @@ func StartServer(ctx context.Context, port string) {
 	// Starting the server
 	lg.Info("Starting front server", slog.String("port", port))
 	go func() {
-		if err := server.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			lg.Error("Could not start server: ", err)
 		}
 	}()

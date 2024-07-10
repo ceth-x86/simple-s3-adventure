@@ -1,9 +1,10 @@
 package main
 
 import (
-	"simple-s3-adventure/internal/chunk_server"
+	"simple-s3-adventure/internal/chunk_server/api"
+	"simple-s3-adventure/internal/chunk_server/service"
 )
 
 func main() {
-	chunk_server.StartServer(chunk_server.NewServerConfig())
+	api.StartServer(service.NewServerConfig())
 }

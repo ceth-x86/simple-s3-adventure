@@ -1,4 +1,4 @@
-package chunk_server
+package api
 
 import (
 	"context"
@@ -8,56 +8,19 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"regexp"
-	"strconv"
+	"simple-s3-adventure/internal/chunk_server/service"
 	"time"
 
 	"github.com/cenkalti/backoff"
 
-	"simple-s3-adventure/pkg/config"
 	"simple-s3-adventure/pkg/logger"
 )
 
 const (
-	uuidPattern       = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 	registrationDelay = 5 * time.Second
 )
 
-var uuidRegex = regexp.MustCompile(uuidPattern)
-
-type ServerConfig struct {
-	Port               string
-	UploadDir          string
-	FrontServerAddress string
-	MaxUploadSize      int64
-}
-
-func NewServerConfig() *ServerConfig {
-	cfg := &ServerConfig{
-		Port:               config.GetEnvString("PORT", "12090"),
-		UploadDir:          config.GetEnvString("UPLOAD_DIR", "tmp"),
-		FrontServerAddress: config.GetEnvString("FRONT_SERVER_ADDRESS", "http://front-server:13090"),
-		MaxUploadSize:      config.GetEnvInt64("MAX_UPLOAD_SIZE", 10<<20),
-	}
-
-	if err := validatePort(cfg.Port); err != nil {
-		lg := logger.GetLogger()
-		lg.Error("Invalid port number", slog.String("port", cfg.Port))
-		os.Exit(1)
-	}
-
-	return cfg
-}
-
-// validatePort checks if the given port is valid.
-func validatePort(port string) error {
-	if _, err := strconv.Atoi(port); err != nil {
-		return fmt.Errorf("invalid port: %w", err)
-	}
-	return nil
-}
-
-func registerHandlers(mux *http.ServeMux, config *ServerConfig) {
+func registerHandlers(mux *http.ServeMux, config *service.ServerConfig) {
 	mux.HandleFunc("/put", func(w http.ResponseWriter, r *http.Request) {
 		PutHandler(w, r, config)
 	})
@@ -70,7 +33,7 @@ func registerHandlers(mux *http.ServeMux, config *ServerConfig) {
 }
 
 // StartServer starts the HTTP server on the given port.
-func StartServer(config *ServerConfig) {
+func StartServer(config *service.ServerConfig) {
 	mux := http.NewServeMux()
 	registerHandlers(mux, config)
 

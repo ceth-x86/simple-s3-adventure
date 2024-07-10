@@ -1,11 +1,11 @@
-package front_server
+package chunker
 
 import (
 	"reflect"
 	"testing"
 )
 
-// Тестовая функция для chunkSize
+// Тестовая функция для ChunkSize
 func TestChunkSize(t *testing.T) {
 	tests := []struct {
 		fileSize int64
@@ -24,9 +24,9 @@ func TestChunkSize(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := chunkSize(tt.fileSize, tt.numParts)
+		result := ChunkSize(tt.fileSize, tt.numParts)
 		if result != tt.expected {
-			t.Errorf("chunkSize(%d, %d) = %d; expected %d", tt.fileSize, tt.numParts, result, tt.expected)
+			t.Errorf("ChunkSize(%d, %d) = %d; expected %d", tt.fileSize, tt.numParts, result, tt.expected)
 		}
 	}
 }
@@ -49,9 +49,9 @@ func TestChunkOffsets(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		result := chunkOffsets(tt.fileSize, tt.numParts)
+		result := ChunkOffsets(tt.fileSize, tt.numParts)
 		if !reflect.DeepEqual(result, tt.expected) {
-			t.Errorf("chunkOffsets(%d, %d) = %v; expected %v", tt.fileSize, tt.numParts, result, tt.expected)
+			t.Errorf("ChunkOffsets(%d, %d) = %v; expected %v", tt.fileSize, tt.numParts, result, tt.expected)
 		}
 	}
 }

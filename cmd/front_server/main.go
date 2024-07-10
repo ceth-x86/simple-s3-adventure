@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"simple-s3-adventure/internal/front_server"
+	"simple-s3-adventure/internal/front_server/api"
 	"syscall"
 )
 
@@ -27,5 +27,5 @@ func main() {
 		cancel(errors.New("app termination by sigterm"))
 	}()
 
-	front_server.StartServer(ctx, port)
+	api.StartServer(ctx, port)
 }
