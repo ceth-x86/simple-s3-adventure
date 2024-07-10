@@ -1,8 +1,8 @@
-package front_server
+package chunker
 
 const wordSize = 8
 
-func chunkSize(fileSize int64, numParts int) int64 {
+func ChunkSize(fileSize int64, numParts int) int64 {
 	// Size of each part without alignment consideration
 	partSize := fileSize / int64(numParts)
 
@@ -12,8 +12,8 @@ func chunkSize(fileSize int64, numParts int) int64 {
 	return alignedPartSize
 }
 
-func chunkOffsets(fileSize int64, numParts int) []int64 {
-	chSize := chunkSize(fileSize, numParts)
+func ChunkOffsets(fileSize int64, numParts int) []int64 {
+	chSize := ChunkSize(fileSize, numParts)
 	offsets := make([]int64, numParts)
 	offsets[0] = 0
 	for i := 1; i < numParts; i++ {

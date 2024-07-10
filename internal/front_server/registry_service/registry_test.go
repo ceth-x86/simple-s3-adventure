@@ -1,7 +1,6 @@
-package front_server
+package registry_service
 
 import (
-	"container/list"
 	"strconv"
 	"sync"
 	"testing"
@@ -10,37 +9,31 @@ import (
 )
 
 func TestChunkServerRegistry_AddChunkServer(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
 	t.Run("Add new chunk server", func(t *testing.T) {
-		err := registry.addChunkServer("http://chunkserver1")
+		err := registry.AddChunkServer("http://chunkserver1")
 		assert.NoError(t, err)
 		assert.Contains(t, registry.chunkServerAddresses, "http://chunkserver1")
 	})
 
 	t.Run("Add duplicate chunk server", func(t *testing.T) {
-		err := registry.addChunkServer("http://chunkserver1")
+		err := registry.AddChunkServer("http://chunkserver1")
 		assert.ErrorIs(t, err, ErrChunkServerAlreadyRegistered)
 	})
 }
 
 func TestChunkServerRegistry_AdjustSizes(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
-	server1 := &chunkServer{address: "http://chunkserver1", size: 0}
-	server2 := &chunkServer{address: "http://chunkserver2", size: 0}
+	server1 := &ChunkServer{Address: "http://chunkserver1", size: 0}
+	server2 := &ChunkServer{Address: "http://chunkserver2", size: 0}
 	registry.chunkServers.PushBack(server1)
 	registry.chunkServers.PushBack(server2)
 
 	sizes := []int64{100, 200}
 	totalSize := int64(300)
-	registry.adjustSizes([]*chunkServer{server1, server2}, sizes, totalSize)
+	registry.AdjustSizes([]*ChunkServer{server1, server2}, sizes, totalSize)
 
 	assert.Equal(t, int64(100), server1.size)
 	assert.Equal(t, int64(200), server2.size)
@@ -48,14 +41,11 @@ func TestChunkServerRegistry_AdjustSizes(t *testing.T) {
 }
 
 func TestChunkServerRegistry_SelectUnderloadedChunkServers(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
-	server1 := &chunkServer{address: "http://chunkserver1", size: 50}
-	server2 := &chunkServer{address: "http://chunkserver2", size: 100}
-	server3 := &chunkServer{address: "http://chunkserver3", size: 150}
+	server1 := &ChunkServer{Address: "http://chunkserver1", size: 50}
+	server2 := &ChunkServer{Address: "http://chunkserver2", size: 100}
+	server3 := &ChunkServer{Address: "http://chunkserver3", size: 150}
 
 	registry.chunkServerAddresses["http://chunkserver1"] = struct{}{}
 	registry.chunkServerAddresses["http://chunkserver2"] = struct{}{}
@@ -68,14 +58,14 @@ func TestChunkServerRegistry_SelectUnderloadedChunkServers(t *testing.T) {
 	registry.totalSize = 300
 
 	t.Run("Select underloaded servers when enough available", func(t *testing.T) {
-		servers := registry.selectUnderloadedChunkServers(2)
+		servers := registry.SelectUnderloadedChunkServers(2)
 		assert.Len(t, servers, 2)
 		assert.Contains(t, servers, server1)
 		assert.Contains(t, servers, server2)
 	})
 
 	t.Run("Select underloaded servers when enough available", func(t *testing.T) {
-		servers := registry.selectUnderloadedChunkServers(3)
+		servers := registry.SelectUnderloadedChunkServers(3)
 		assert.Len(t, servers, 3)
 		assert.Contains(t, servers, server1)
 		assert.Contains(t, servers, server2)
@@ -83,27 +73,25 @@ func TestChunkServerRegistry_SelectUnderloadedChunkServers(t *testing.T) {
 	})
 
 	t.Run("Select when not enough available", func(t *testing.T) {
-		servers := registry.selectUnderloadedChunkServers(5)
+		servers := registry.SelectUnderloadedChunkServers(5)
 		assert.Nil(t, servers)
 	})
 }
 
 func TestChunkAllocationMap(t *testing.T) {
-	cam := &chunkAllocationMap{
-		chunks: make(map[string][]*chunkServer),
-	}
+	cam := NewChunkAllocationMap()
 
-	chunkServer1 := &chunkServer{address: "http://chunkserver1", size: 0}
-	chunkServer2 := &chunkServer{address: "http://chunkserver2", size: 0}
-	cam.addChunk("file1", []*chunkServer{chunkServer1, chunkServer2})
+	chunkServer1 := &ChunkServer{Address: "http://chunkserver1", size: 0}
+	chunkServer2 := &ChunkServer{Address: "http://chunkserver2", size: 0}
+	cam.AddChunk("file1", []*ChunkServer{chunkServer1, chunkServer2})
 
 	t.Run("Get chunk servers for existing file", func(t *testing.T) {
-		servers := cam.getChunkServers("file1")
+		servers := cam.GetChunkServers("file1")
 		assert.Len(t, servers, 2)
 	})
 
 	t.Run("Get chunk servers for non-existing file", func(t *testing.T) {
-		servers := cam.getChunkServers("file2")
+		servers := cam.GetChunkServers("file2")
 		assert.Nil(t, servers)
 	})
 }
@@ -121,7 +109,7 @@ func TestSizeThreshold(t *testing.T) {
 }
 
 func TestChunkServer_AddSize(t *testing.T) {
-	server := &chunkServer{address: "http://chunkserver1", size: 0}
+	server := &ChunkServer{Address: "http://chunkserver1", size: 0}
 	server.addSize(100)
 	assert.Equal(t, int64(100), server.size)
 
@@ -130,10 +118,7 @@ func TestChunkServer_AddSize(t *testing.T) {
 }
 
 func TestChunkServerRegistry_AddChunkServerConcurrency(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
 	var wg sync.WaitGroup
 	serverCount := 100
@@ -143,7 +128,7 @@ func TestChunkServerRegistry_AddChunkServerConcurrency(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			url := "http://chunkserver" + strconv.Itoa(i)
-			_ = registry.addChunkServer(url)
+			_ = registry.AddChunkServer(url)
 		}(i)
 	}
 
@@ -152,13 +137,10 @@ func TestChunkServerRegistry_AddChunkServerConcurrency(t *testing.T) {
 }
 
 func TestChunkServerRegistry_AdjustSizesConcurrency(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
-	server1 := &chunkServer{address: "http://chunkserver1", size: 0}
-	server2 := &chunkServer{address: "http://chunkserver2", size: 0}
+	server1 := &ChunkServer{Address: "http://chunkserver1", size: 0}
+	server2 := &ChunkServer{Address: "http://chunkserver2", size: 0}
 	registry.chunkServers.PushBack(server1)
 	registry.chunkServers.PushBack(server2)
 
@@ -169,12 +151,12 @@ func TestChunkServerRegistry_AdjustSizesConcurrency(t *testing.T) {
 	for i := 0; i < sizeUpdates; i++ {
 		go func() {
 			defer wg.Done()
-			registry.adjustSizes([]*chunkServer{server1}, []int64{10}, 10)
+			registry.AdjustSizes([]*ChunkServer{server1}, []int64{10}, 10)
 		}()
 
 		go func() {
 			defer wg.Done()
-			registry.adjustSizes([]*chunkServer{server2}, []int64{20}, 20)
+			registry.AdjustSizes([]*ChunkServer{server2}, []int64{20}, 20)
 		}()
 	}
 
@@ -185,15 +167,11 @@ func TestChunkServerRegistry_AdjustSizesConcurrency(t *testing.T) {
 }
 
 func TestChunkServerRegistry_SelectUnderloadedChunkServersWithWrapAround(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-		totalSize:            0,
-	}
+	registry := NewChunkServerRegistry()
 
-	server1 := &chunkServer{address: "http://chunkserver1", size: 50}
-	server2 := &chunkServer{address: "http://chunkserver2", size: 60}
-	server3 := &chunkServer{address: "http://chunkserver3", size: 70}
+	server1 := &ChunkServer{Address: "http://chunkserver1", size: 50}
+	server2 := &ChunkServer{Address: "http://chunkserver2", size: 60}
+	server3 := &ChunkServer{Address: "http://chunkserver3", size: 70}
 
 	registry.chunkServerAddresses["http://chunkserver1"] = struct{}{}
 	registry.chunkServerAddresses["http://chunkserver2"] = struct{}{}
@@ -206,22 +184,18 @@ func TestChunkServerRegistry_SelectUnderloadedChunkServersWithWrapAround(t *test
 	registry.totalSize = 180
 	registry.nextServer = registry.chunkServers.Front().Next() // Start from the second server
 
-	servers := registry.selectUnderloadedChunkServers(2)
+	servers := registry.SelectUnderloadedChunkServers(2)
 	assert.Len(t, servers, 2)
 	assert.Equal(t, server2, servers[0])
 	assert.Equal(t, server3, servers[1])
 }
 
 func TestChunkServerRegistry_SelectAfterAddingNewServer(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-		totalSize:            0,
-	}
+	registry := NewChunkServerRegistry()
 
-	server1 := &chunkServer{address: "http://chunkserver1", size: 50}
-	server2 := &chunkServer{address: "http://chunkserver2", size: 50}
-	server3 := &chunkServer{address: "http://chunkserver3", size: 0}
+	server1 := &ChunkServer{Address: "http://chunkserver1", size: 50}
+	server2 := &ChunkServer{Address: "http://chunkserver2", size: 50}
+	server3 := &ChunkServer{Address: "http://chunkserver3", size: 0}
 
 	registry.chunkServerAddresses["http://chunkserver1"] = struct{}{}
 	registry.chunkServerAddresses["http://chunkserver2"] = struct{}{}
@@ -234,7 +208,7 @@ func TestChunkServerRegistry_SelectAfterAddingNewServer(t *testing.T) {
 	registry.totalSize = 100
 	registry.nextServer = registry.chunkServers.Front().Next() // Start from the second server
 
-	servers := registry.selectUnderloadedChunkServers(3)
+	servers := registry.SelectUnderloadedChunkServers(3)
 	assert.Len(t, servers, 3)
 
 	assert.Equal(t, server3, servers[0])
@@ -243,15 +217,12 @@ func TestChunkServerRegistry_SelectAfterAddingNewServer(t *testing.T) {
 }
 
 func TestChunkServerRegistry_SelectUnderloadedChunkServersConcurrency(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
 	serverCount := 10
 	for i := 0; i < serverCount; i++ {
-		server := &chunkServer{address: "http://chunkserver" + string(rune(i)), size: int64(i * 10)}
-		registry.chunkServerAddresses[server.address] = struct{}{}
+		server := &ChunkServer{Address: "http://chunkserver" + string(rune(i)), size: int64(i * 10)}
+		registry.chunkServerAddresses[server.Address] = struct{}{}
 		registry.chunkServers.PushBack(server)
 		registry.totalSize += int64(i * 10)
 	}
@@ -263,7 +234,7 @@ func TestChunkServerRegistry_SelectUnderloadedChunkServersConcurrency(t *testing
 	for i := 0; i < selectionCount; i++ {
 		go func() {
 			defer wg.Done()
-			servers := registry.selectUnderloadedChunkServers(5)
+			servers := registry.SelectUnderloadedChunkServers(5)
 			assert.Len(t, servers, 5)
 		}()
 	}
@@ -272,10 +243,7 @@ func TestChunkServerRegistry_SelectUnderloadedChunkServersConcurrency(t *testing
 }
 
 func TestChunkServerRegistry_AddAndSelectConcurrency(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
 	var wg sync.WaitGroup
 	serverCount := 50
@@ -286,14 +254,14 @@ func TestChunkServerRegistry_AddAndSelectConcurrency(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			url := "http://chunkserver" + string(rune(i))
-			_ = registry.addChunkServer(url)
+			_ = registry.AddChunkServer(url)
 		}(i)
 	}
 
 	for i := 0; i < selectionCount; i++ {
 		go func() {
 			defer wg.Done()
-			servers := registry.selectUnderloadedChunkServers(5)
+			servers := registry.SelectUnderloadedChunkServers(5)
 			if len(registry.chunkServerAddresses) >= 5 {
 				assert.Len(t, servers, 5)
 			}
@@ -305,15 +273,12 @@ func TestChunkServerRegistry_AddAndSelectConcurrency(t *testing.T) {
 }
 
 func TestChunkServerRegistry_AdjustAndSelectConcurrency(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
-	server1 := &chunkServer{address: "http://chunkserver1", size: 0}
-	server2 := &chunkServer{address: "http://chunkserver2", size: 0}
-	registry.chunkServerAddresses[server1.address] = struct{}{}
-	registry.chunkServerAddresses[server2.address] = struct{}{}
+	server1 := &ChunkServer{Address: "http://chunkserver1", size: 0}
+	server2 := &ChunkServer{Address: "http://chunkserver2", size: 0}
+	registry.chunkServerAddresses[server1.Address] = struct{}{}
+	registry.chunkServerAddresses[server2.Address] = struct{}{}
 	registry.chunkServers.PushBack(server1)
 	registry.chunkServers.PushBack(server2)
 
@@ -325,14 +290,14 @@ func TestChunkServerRegistry_AdjustAndSelectConcurrency(t *testing.T) {
 	for i := 0; i < adjustmentCount; i++ {
 		go func() {
 			defer wg.Done()
-			registry.adjustSizes([]*chunkServer{server1, server2}, []int64{10, 20}, 30)
+			registry.AdjustSizes([]*ChunkServer{server1, server2}, []int64{10, 20}, 30)
 		}()
 	}
 
 	for i := 0; i < selectionCount; i++ {
 		go func() {
 			defer wg.Done()
-			servers := registry.selectUnderloadedChunkServers(2)
+			servers := registry.SelectUnderloadedChunkServers(2)
 			assert.Len(t, servers, 2)
 		}()
 	}
@@ -344,10 +309,7 @@ func TestChunkServerRegistry_AdjustAndSelectConcurrency(t *testing.T) {
 }
 
 func TestChunkServerRegistry_AddChunkServerHighConcurrency(t *testing.T) {
-	registry := &chunkServerRegistry{
-		chunkServerAddresses: make(map[string]struct{}),
-		chunkServers:         list.New(),
-	}
+	registry := NewChunkServerRegistry()
 
 	var wg sync.WaitGroup
 	serverCount := 1000
@@ -357,7 +319,7 @@ func TestChunkServerRegistry_AddChunkServerHighConcurrency(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			url := "http://chunkserver" + string(rune(i))
-			_ = registry.addChunkServer(url)
+			_ = registry.AddChunkServer(url)
 		}(i)
 	}
 
